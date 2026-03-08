@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mnemo — AI Flashcards</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Crimson+Pro:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://js.puter.com/v2/" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
+<style>
+  :root {
+    --ink: #0d0f1a;
+    --parchment: #f5f0e8;
+    --navy: #111827;
+    --deep: #0a0c14;
+    --gold: #c9a84c;
+    --gold-light: #e8cc80;
+    --amber: #d4853a;
+    --teal: #4a9b8e;
+    --crimson: #8b2635;
+    --muted: #6b7280;
+    --card-bg: #14172a;
+    --card-border: rgba(201,168,76,0.2);
+    --glow: rgba(201,168,76,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Crimson Pro', Georgia, serif;
+    background: var(--deep);
+    color: var(--parchment);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  /* Radial glow */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80vw;
+    height: 60vh;
+    background: radial-gradient(ellipse, rgba(201,168,76,0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    text-align: center;
+    padding: 3rem 2rem 2rem;
+    position: relative;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2.2rem, 5vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--gold);
+    text-shadow: 0 0 40px rgba(201,168,76,0.3);
+  }
+
+  .logo span {
+    font-style: italic;
+    color: var(--gold-light);
+  }
+
+  .tagline {
+    font-size: 1rem;
+    color: var(--muted);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-top: 0.4rem;
+    font-weight: 300;
+  }
+
+  .divider {
+    width: 120px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 1.5rem auto 0;
+  }
+
+  /* ─── MODE SELECTOR ─── */
+  .mode-section {
+    max-width: 960px;
+    margin: 2.5rem auto 0;
+    padding: 0 1.5rem;
+  }
+
+  .mode-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .mode-tabs {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .mode-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1.4rem;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 2px;
+    color: var(--muted);
+    font-family: 'Crimson Pro', serif;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mode-tab::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--glow);
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+
+  .mode-tab:hover { color: var(--gold-light); border-color: rgba(201,168,76,0.5); }
+  .mode-tab:hover::before { opacity: 1; }
+
+  .mode-tab.active {
+    color: var(--gold);
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.07);
+    box-shadow: 0 0 20px rgba(201,168,76,0.1), inset 0 0 20px rgba(201,168,76,0.05);
+  }
+
+  .tab-icon { font-size: 1.1rem; }
+
+  /* ─── MAIN AREA ─── */
+  .main {
+    max-width: 960px;
+    margin: 3rem auto;
+    padding: 0 1.5rem;
+  }
+
+  /* ─── PANELS ─── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ─── FLASHCARD CREATOR ─── */
+  .creator-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    padding: 2rem;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    position: relative;
+  }
+
+  .creator-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 20%; right: 20%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+
+  .input-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+  }
+
+  .input-group {
+    flex: 1;
+  }
+
+  .input-label {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 0.6rem;
+  }
+
+  .text-input {
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 2px;
+    padding: 0.8rem 1rem;
+    color: var(--parchment);
+    font-family: 'Crimson Pro', serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.03em;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .text-input:focus {
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.04);
+    box-shadow: 0 0 0 3px rgba(201,168,76,0.08);
+  }
+
+  .text-input::placeholder { color: rgba(245,240,232,0.2); }
+
+  .generate-btn {
+    padding: 0.8rem 2rem;
+    background: linear-gradient(135deg, rgba(201,168,76,0.15), rgba(201,168,76,0.08));
+    border: 1px solid var(--gold);
+    border-radius: 2px;
+    color: var(--gold);
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.25s;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .generate-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.05));
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+
+  .generate-btn:hover { box-shadow: 0 0 25px rgba(201,168,76,0.2); transform: translateY(-1px); }
+  .generate-btn:hover::before { opacity: 1; }
+  .generate-btn:active { transform: translateY(0); }
+  .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* ─── FLASHCARD FLIP ─── */
+  .card-scene {
+    perspective: 1200px;
+    width: 100%;
+    max-width: 680px;
+    margin: 2.5rem auto 0;
+    height: 380px;
+  }
+
+  .card-wrap {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.7s cubic-bezier(0.4,0.2,0.2,1);
+    cursor: pointer;
+  }
+
+  .card-wrap.flipped { transform: rotateY(180deg); }
+
+  .card-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2.5rem;
+    overflow: hidden;
+  }
+
+  .card-front {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .card-front::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+
+  .card-back {
+    background: linear-gradient(160deg, #12172b 0%, #0e1220 100%);
+    border: 1px solid rgba(201,168,76,0.3);
+    transform: rotateY(180deg);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    overflow-y: auto;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .card-mode-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    opacity: 0.5;
+  }
+
+  .card-front-word {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 600;
+    color: var(--parchment);
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .card-front-sub {
+    margin-top: 0.8rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .flip-hint {
+    position: absolute;
+    bottom: 1.2rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    opacity: 0.6;
+  }
+
+  /* ─── ANSWER CONTENT ─── */
+  .answer-content { width: 100%; }
+
+  .answer-section {
+    margin-bottom: 1.2rem;
+    padding-bottom: 1.2rem;
+    border-bottom: 1px solid rgba(201,168,76,0.1);
+  }
+
+  .answer-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+  .answer-section-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 0.45rem;
+    font-family: 'Crimson Pro', serif;
+    font-weight: 500;
+  }
+
+  .answer-section-body {
+    font-size: 1rem;
+    color: var(--parchment);
+    line-height: 1.65;
+    font-style: normal;
+  }
+
+  .answer-section-body em { font-style: italic; color: var(--gold-light); }
+  .answer-section-body strong { font-weight: 600; color: #fff; }
+
+  /* Math formula styling */
+  .formula-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.05rem;
+    background: rgba(74,155,142,0.1);
+    border: 1px solid rgba(74,155,142,0.3);
+    border-radius: 3px;
+    padding: 0.9rem 1.2rem;
+    color: #7dd3c8;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  /* ─── LOADING ─── */
+  .loading-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(10,12,20,0.85);
+    border-radius: 4px;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 1rem;
+    z-index: 10;
+  }
+
+  .loading-overlay.active { display: flex; }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 2px solid rgba(201,168,76,0.15);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 0.8rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ─── DECK (saved cards) ─── */
+  .deck-section {
+    margin-top: 3.5rem;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    color: var(--gold-light);
+    letter-spacing: 0.05em;
+  }
+
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(201,168,76,0.2), transparent);
+  }
+
+  .deck-count {
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  .deck-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+
+  .deck-item {
+    background: rgba(20,23,42,0.8);
+    border: 1px solid rgba(201,168,76,0.12);
+    border-radius: 3px;
+    padding: 1.2rem 1.4rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .deck-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--gold);
+    opacity: 0.4;
+    transition: opacity 0.2s;
+  }
+
+  .deck-item:hover { border-color: rgba(201,168,76,0.35); transform: translateY(-2px); }
+  .deck-item:hover::before { opacity: 0.9; }
+
+  .deck-item-mode {
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .deck-item-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    color: var(--parchment);
+  }
+
+  .deck-item-delete {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.8rem;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: rgba(139,38,53,0.5);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    transition: color 0.2s;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 2px;
+  }
+
+  .deck-item-delete:hover { color: var(--crimson); background: rgba(139,38,53,0.1); }
+
+  .empty-deck {
+    text-align: center;
+    padding: 2.5rem;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 1rem;
+    border: 1px dashed rgba(201,168,76,0.1);
+    border-radius: 3px;
+  }
+
+  /* ─── TIMETABLE (History mode) ─── */
+  .timetable-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .sub-tab {
+    padding: 0.5rem 1.2rem;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.15);
+    border-radius: 2px;
+    color: var(--muted);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .sub-tab.active { color: var(--gold); border-color: var(--gold); background: rgba(201,168,76,0.07); }
+  .sub-tab:hover:not(.active) { color: var(--parchment); border-color: rgba(201,168,76,0.3); }
+
+  /* ─── TIMELINE ─── */
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(180deg, var(--gold), transparent);
+    opacity: 0.3;
+  }
+
+  .timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+    padding-left: 1.5rem;
+    animation: fadeIn 0.4s ease forwards;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .timeline-dot {
+    position: absolute;
+    left: -2.35rem;
+    top: 0.3rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 10px rgba(201,168,76,0.5);
+  }
+
+  .timeline-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.3rem;
+  }
+
+  .timeline-event {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    color: var(--parchment);
+    margin-bottom: 0.3rem;
+  }
+
+  .timeline-detail {
+    font-size: 0.92rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .empty-timeline {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--muted);
+    font-style: italic;
+    border: 1px dashed rgba(201,168,76,0.1);
+    border-radius: 3px;
+    font-size: 1rem;
+  }
+
+  /* ─── SAVE BUTTON ─── */
+  .card-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .save-btn {
+    padding: 0.55rem 1.5rem;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 2px;
+    color: var(--muted);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .save-btn:hover { color: var(--gold); border-color: var(--gold); }
+  .save-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ─── ERROR ─── */
+  .error-msg {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(139,38,53,0.1);
+    border: 1px solid rgba(139,38,53,0.3);
+    border-radius: 2px;
+    color: #e07b8a;
+    font-size: 0.9rem;
+    display: none;
+  }
+
+  .error-msg.active { display: block; }
+
+  /* ─── API KEY BAR ─── */
+  .apikey-bar {
+    max-width: 960px;
+    margin: 1.5rem auto 0;
+    padding: 0 1.5rem;
+  }
+
+  .apikey-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(201,168,76,0.04);
+    border: 1px solid rgba(201,168,76,0.18);
+    border-radius: 3px;
+    padding: 0.7rem 1rem;
+  }
+
+  .apikey-icon { font-size: 0.9rem; opacity: 0.6; flex-shrink: 0; }
+
+  .apikey-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--parchment);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    min-width: 0;
+  }
+
+  .apikey-input::placeholder { color: rgba(245,240,232,0.2); }
+
+  .apikey-toggle {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 0.2rem;
+    flex-shrink: 0;
+    transition: color 0.2s;
+  }
+
+  .apikey-toggle:hover { color: var(--gold); }
+
+  .apikey-status {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    flex-shrink: 0;
+    padding: 0.2rem 0.6rem;
+    border-radius: 2px;
+    font-family: 'Crimson Pro', serif;
+  }
+
+  .apikey-status.set {
+    color: #6fcf8a;
+    background: rgba(111,207,138,0.1);
+    border: 1px solid rgba(111,207,138,0.2);
+  }
+
+  .apikey-status.unset {
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid rgba(107,114,128,0.2);
+  }
+
+  .apikey-hint {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+    font-style: italic;
+  }
+
+  .apikey-hint a { color: var(--gold); opacity: 0.7; text-decoration: none; }
+  .apikey-hint a:hover { opacity: 1; }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 640px) {
+    .input-row { flex-direction: column; }
+    .card-scene { height: 420px; }
+    .card-face { padding: 1.5rem; }
+    .mode-tab { padding: 0.6rem 1rem; font-size: 0.9rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">M<span>nemo</span></div>
+  <p class="tagline">AI-Powered Study Cards</p>
+  <div class="divider"></div>
+</header>
+
+<div class="apikey-bar">
+  <div class="apikey-inner" style="justify-content:center; gap:0.8rem;">
+    <span class="apikey-icon">✦</span>
+    <span style="font-size:0.95rem; color:var(--gold-light); letter-spacing:0.05em;">Powered by Puter.js — APIキー不要・完全無料</span>
+  </div>
+  <p class="apikey-hint">初回生成時にPuterのログイン画面が出ます。無料アカウントを作るか既存アカウントでログインしてください。</p>
+</div>
+
+<div class="mode-section">
+  <p class="mode-label">Select Mode</p>
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="vocab" onclick="switchMode('vocab')">
+      <span class="tab-icon">📖</span> Vocabulary
+    </button>
+    <button class="mode-tab" data-mode="math" onclick="switchMode('math')">
+      <span class="tab-icon">∑</span> Mathematics
+    </button>
+    <button class="mode-tab" data-mode="history" onclick="switchMode('history')">
+      <span class="tab-icon">⏳</span> History
+    </button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ══════ VOCAB PANEL ══════ -->
+  <div class="panel active" id="panel-vocab">
+    <div class="creator-card" style="position:relative">
+      <div class="loading-overlay" id="loading-vocab">
+        <div class="spinner"></div>
+        <p class="loading-text">Consulting the lexicon…</p>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label class="input-label" for="vocab-input">Enter a word</label>
+          <input type="text" id="vocab-input" class="text-input" placeholder="e.g. ephemeral, sonder, petrichor…" />
+        </div>
+        <button class="generate-btn" onclick="generateVocab()">Generate →</button>
+      </div>
+      <div class="error-msg" id="error-vocab"></div>
+    </div>
+
+    <div id="card-area-vocab" style="display:none">
+      <div class="card-scene">
+        <div class="card-wrap" id="card-vocab" onclick="flipCard('vocab')">
+          <div class="card-face card-front">
+            <span class="card-mode-badge">Vocabulary</span>
+            <p class="card-front-word" id="card-vocab-word">—</p>
+            <p class="card-front-sub">Click to reveal</p>
+            <span class="flip-hint">↻ flip</span>
+          </div>
+          <div class="card-face card-back">
+            <span class="card-mode-badge">Vocabulary</span>
+            <div class="answer-content" id="card-vocab-back"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="save-btn" id="save-vocab-btn" onclick="saveCard('vocab')">＋ Save to Deck</button>
+      </div>
+    </div>
+
+    <div class="deck-section">
+      <div class="section-header">
+        <h2 class="section-title">Your Vocab Deck</h2>
+        <div class="section-line"></div>
+        <span class="deck-count" id="vocab-deck-count">0 cards</span>
+      </div>
+      <div class="deck-grid" id="vocab-deck"></div>
+    </div>
+  </div>
+
+  <!-- ══════ MATH PANEL ══════ -->
+  <div class="panel" id="panel-math">
+    <div class="creator-card" style="position:relative">
+      <div class="loading-overlay" id="loading-math">
+        <div class="spinner"></div>
+        <p class="loading-text">Deriving the formula…</p>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label class="input-label" for="math-input">Theorem or formula name</label>
+          <input type="text" id="math-input" class="text-input" placeholder="e.g. Pythagorean theorem, Euler's identity…" />
+        </div>
+        <button class="generate-btn" onclick="generateMath()">Generate →</button>
+      </div>
+      <div class="error-msg" id="error-math"></div>
+    </div>
+
+    <div id="card-area-math" style="display:none">
+      <div class="card-scene">
+        <div class="card-wrap" id="card-math" onclick="flipCard('math')">
+          <div class="card-face card-front">
+            <span class="card-mode-badge">Mathematics</span>
+            <p class="card-front-word" id="card-math-word">—</p>
+            <p class="card-front-sub">Click to reveal formula</p>
+            <span class="flip-hint">↻ flip</span>
+          </div>
+          <div class="card-face card-back">
+            <span class="card-mode-badge">Mathematics</span>
+            <div class="answer-content" id="card-math-back"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="save-btn" id="save-math-btn" onclick="saveCard('math')">＋ Save to Deck</button>
+      </div>
+    </div>
+
+    <div class="deck-section">
+      <div class="section-header">
+        <h2 class="section-title">Your Formula Deck</h2>
+        <div class="section-line"></div>
+        <span class="deck-count" id="math-deck-count">0 cards</span>
+      </div>
+      <div class="deck-grid" id="math-deck"></div>
+    </div>
+  </div>
+
+  <!-- ══════ HISTORY PANEL ══════ -->
+  <div class="panel" id="panel-history">
+    <div class="timetable-toggle">
+      <button class="sub-tab active" onclick="switchHistoryView('flashcard')">Flashcard</button>
+      <button class="sub-tab" onclick="switchHistoryView('timetable')">Timetable</button>
+    </div>
+
+    <div id="history-flashcard-view">
+      <div class="creator-card" style="position:relative">
+        <div class="loading-overlay" id="loading-history">
+          <div class="spinner"></div>
+          <p class="loading-text">Searching the archives…</p>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label" for="history-input">Historical event or occasion</label>
+            <input type="text" id="history-input" class="text-input" placeholder="e.g. Fall of Rome, Moon Landing, Battle of Thermopylae…" />
+          </div>
+          <button class="generate-btn" onclick="generateHistory()">Generate →</button>
+        </div>
+        <div class="error-msg" id="error-history"></div>
+      </div>
+
+      <div id="card-area-history" style="display:none">
+        <div class="card-scene">
+          <div class="card-wrap" id="card-history" onclick="flipCard('history')">
+            <div class="card-face card-front">
+              <span class="card-mode-badge">History</span>
+              <p class="card-front-word" id="card-history-word">—</p>
+              <p class="card-front-sub">Click to reveal</p>
+              <span class="flip-hint">↻ flip</span>
+            </div>
+            <div class="card-face card-back">
+              <span class="card-mode-badge">History</span>
+              <div class="answer-content" id="card-history-back"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="save-btn" id="save-history-btn" onclick="saveCard('history')">＋ Save to Deck</button>
+        </div>
+      </div>
+
+      <div class="deck-section">
+        <div class="section-header">
+          <h2 class="section-title">Your History Deck</h2>
+          <div class="section-line"></div>
+          <span class="deck-count" id="history-deck-count">0 cards</span>
+        </div>
+        <div class="deck-grid" id="history-deck"></div>
+      </div>
+    </div>
+
+    <div id="history-timetable-view" style="display:none">
+      <div class="section-header">
+        <h2 class="section-title">Chronological Timetable</h2>
+        <div class="section-line"></div>
+      </div>
+      <div class="timeline" id="timeline-container">
+        <div class="empty-timeline">No history cards yet. Generate some flashcards and save them to build your timetable.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────
+const state = {
+  currentMode: 'vocab',
+  currentCard: { vocab: null, math: null, history: null },
+  decks: { vocab: [], math: [], history: [] }
+};
+
+// ─── Mode Switching ───────────────────────────────────────
+function switchMode(mode) {
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`panel-${mode}`).classList.add('active');
+  state.currentMode = mode;
+}
+
+function switchHistoryView(view) {
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('history-flashcard-view').style.display = view === 'flashcard' ? 'block' : 'none';
+  document.getElementById('history-timetable-view').style.display = view === 'timetable' ? 'block' : 'none';
+  if (view === 'timetable') renderTimeline();
+}
+
+// ─── Card Flip ────────────────────────────────────────────
+function flipCard(mode) {
+  document.getElementById(`card-${mode}`).classList.toggle('flipped');
+}
+
+// ─── API Key Management (not needed with Puter.js) ────────
+function handleApiKeyInput() {}
+function toggleKeyVis() {}
+function getApiKey() { return ''; }
+function initApiKeyUI() {}
+
+// ─── API Call (Puter.js — no API key needed) ──────────────
+async function callAI(systemPrompt, userPrompt) {
+  const response = await puter.ai.chat(
+    userPrompt,
+    { system: systemPrompt }
+  );
+  if (typeof response === 'string') return response;
+  return response?.message?.content?.[0]?.text
+      || response?.content?.[0]?.text
+      || response?.text
+      || JSON.stringify(response);
+}
+
+// ─── VOCAB ────────────────────────────────────────────────
+async function generateVocab() {
+  const word = document.getElementById('vocab-input').value.trim();
+  if (!word) return;
+  showLoading('vocab', true);
+  clearError('vocab');
+
+  const system = `You are a lexicographer. Respond ONLY with a JSON object (no markdown, no backticks).
+Schema: { "definition": string, "japanese": string, "slang": string, "etymology": string, "related": string }
+- definition: clear English definition (1-2 sentences)
+- japanese: meaning in Japanese (use Japanese characters + romaji)
+- slang: slang usage or informal context (1-2 sentences)
+- etymology: word origin/history (1-2 sentences)
+- related: 4-5 related or synonymous words (comma separated)`;
+
+  try {
+    const raw = await callAI(system, `Word: ${word}`);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    state.currentCard.vocab = { word, data: parsed };
+    renderVocabCard(word, parsed);
+    document.getElementById('card-area-vocab').style.display = 'block';
+    document.getElementById('card-vocab').classList.remove('flipped');
+    document.getElementById('save-vocab-btn').disabled = false;
+  } catch(e) {
+    showError('vocab', 'Failed to generate. Please try again.');
+    console.error(e);
+  }
+  showLoading('vocab', false);
+}
+
+function renderVocabCard(word, d) {
+  document.getElementById('card-vocab-word').textContent = word;
+  document.getElementById('card-vocab-back').innerHTML = `
+    <div class="answer-section">
+      <p class="answer-section-title">Definition</p>
+      <p class="answer-section-body">${d.definition}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">日本語 (Japanese)</p>
+      <p class="answer-section-body">${d.japanese}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Slang & Usage</p>
+      <p class="answer-section-body">${d.slang}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Etymology</p>
+      <p class="answer-section-body"><em>${d.etymology}</em></p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Related Words</p>
+      <p class="answer-section-body">${d.related}</p>
+    </div>
+  `;
+}
+
+// ─── MATH ─────────────────────────────────────────────────
+async function generateMath() {
+  const name = document.getElementById('math-input').value.trim();
+  if (!name) return;
+  showLoading('math', true);
+  clearError('math');
+
+  const system = `You are a mathematics professor. Respond ONLY with a JSON object (no markdown, no backticks).
+Schema: { "formula": string, "description": string, "variables": string, "context": string }
+- formula: the equation using standard notation (Unicode math symbols OK, e.g. ∫, √, π, Σ, ∞, ≠, ≤, ²)
+- description: what the formula states (1-2 sentences)
+- variables: what each variable/symbol means (use plain text, e.g. "a = leg 1, b = leg 2, c = hypotenuse")
+- context: field of math and typical applications (1 sentence)`;
+
+  try {
+    const raw = await callAI(system, `Formula/theorem: ${name}`);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    state.currentCard.math = { word: name, data: parsed };
+    renderMathCard(name, parsed);
+    document.getElementById('card-area-math').style.display = 'block';
+    document.getElementById('card-math').classList.remove('flipped');
+    document.getElementById('save-math-btn').disabled = false;
+    } catch(e) {
+    showError('math', 'Failed to generate. Please try again.');
+    console.error(e);
+  }
+  showLoading('math', false);
+}
+
+function renderMathCard(name, d) {
+  document.getElementById('card-math-word').textContent = name;
+  document.getElementById('card-math-back').innerHTML = `
+    <div class="answer-section">
+      <p class="answer-section-title">Formula</p>
+      <div class="formula-display">${d.formula}</div>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">What It States</p>
+      <p class="answer-section-body">${d.description}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Variables</p>
+      <p class="answer-section-body">${d.variables}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Context</p>
+      <p class="answer-section-body"><em>${d.context}</em></p>
+    </div>
+  `;
+}
+
+// ─── HISTORY ──────────────────────────────────────────────
+async function generateHistory() {
+  const event = document.getElementById('history-input').value.trim();
+  if (!event) return;
+  showLoading('history', true);
+  clearError('history');
+
+  const system = `You are a historian. Respond ONLY with a JSON object (no markdown, no backticks).
+Schema: { "date": string, "when": string, "summary": string, "details": string, "significance": string, "year_num": number }
+- date: specific date or period (e.g. "July 20, 1969" or "476 CE")
+- when: concise "when it happened" description (1 sentence)
+- summary: brief summary (1-2 sentences)
+- details: deeper historical context and key figures (2-3 sentences)
+- significance: why it matters historically (1-2 sentences)
+- year_num: approximate year as a number (negative for BCE, e.g. -44 for 44 BCE). If unknown or pre-history use 0.`;
+
+  try {
+    const raw = await callAI(system, `Historical event: ${event}`);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    state.currentCard.history = { word: event, data: parsed };
+    renderHistoryCard(event, parsed);
+    document.getElementById('card-area-history').style.display = 'block';
+    document.getElementById('card-history').classList.remove('flipped');
+    document.getElementById('save-history-btn').disabled = false;
+    } catch(e) {
+    showError('history', 'Failed to generate. Please try again.');
+    console.error(e);
+  }
+  showLoading('history', false);
+}
+
+function renderHistoryCard(event, d) {
+  document.getElementById('card-history-word').textContent = event;
+  document.getElementById('card-history-back').innerHTML = `
+    <div class="answer-section">
+      <p class="answer-section-title">Date</p>
+      <p class="answer-section-body"><strong>${d.date}</strong> — ${d.when}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Summary</p>
+      <p class="answer-section-body">${d.summary}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Details</p>
+      <p class="answer-section-body">${d.details}</p>
+    </div>
+    <div class="answer-section">
+      <p class="answer-section-title">Historical Significance</p>
+      <p class="answer-section-body"><em>${d.significance}</em></p>
+    </div>
+  `;
+}
+
+// ─── SAVE / DECK ──────────────────────────────────────────
+function saveCard(mode) {
+  const card = state.currentCard[mode];
+  if (!card) return;
+  if (state.decks[mode].find(c => c.word.toLowerCase() === card.word.toLowerCase())) return;
+  state.decks[mode].push({ ...card, id: Date.now() });
+  renderDeck(mode);
+  document.getElementById(`save-${mode}-btn`).disabled = true;
+  document.getElementById(`save-${mode}-btn`).textContent = '✓ Saved';
+}
+
+function renderDeck(mode) {
+  const deck = state.decks[mode];
+  const container = document.getElementById(`${mode}-deck`);
+  const count = document.getElementById(`${mode}-deck-count`);
+  count.textContent = `${deck.length} card${deck.length !== 1 ? 's' : ''}`;
+
+  if (deck.length === 0) {
+    container.innerHTML = '<div class="empty-deck">No cards saved yet.</div>';
+    return;
+  }
+
+  container.innerHTML = deck.map(card => `
+    <div class="deck-item" onclick="loadCard('${mode}', ${card.id})">
+      <button class="deck-item-delete" onclick="event.stopPropagation(); deleteCard('${mode}', ${card.id})">✕</button>
+      <p class="deck-item-mode">${mode === 'vocab' ? '📖 Vocabulary' : mode === 'math' ? '∑ Mathematics' : '⏳ History'}</p>
+      <p class="deck-item-word">${card.word}</p>
+    </div>
+  `).join('');
+}
+
+function deleteCard(mode, id) {
+  state.decks[mode] = state.decks[mode].filter(c => c.id !== id);
+  renderDeck(mode);
+}
+
+function loadCard(mode, id) {
+  const card = state.decks[mode].find(c => c.id === id);
+  if (!card) return;
+  state.currentCard[mode] = card;
+  if (mode === 'vocab') { renderVocabCard(card.word, card.data); }
+  else if (mode === 'math') { renderMathCard(card.word, card.data); }
+  else if (mode === 'history') { renderHistoryCard(card.word, card.data); }
+  document.getElementById(`card-area-${mode}`).style.display = 'block';
+  document.getElementById(`card-${mode}`).classList.remove('flipped');
+  document.getElementById(`save-${mode}-btn`).disabled = true;
+  document.getElementById(`save-${mode}-btn`).textContent = '✓ In Deck';
+}
+
+// ─── TIMELINE ─────────────────────────────────────────────
+function renderTimeline() {
+  const cards = [...state.decks.history].sort((a, b) => (a.data.year_num || 0) - (b.data.year_num || 0));
+  const container = document.getElementById('timeline-container');
+  if (cards.length === 0) {
+    container.innerHTML = '<div class="empty-timeline">No history cards yet. Generate some flashcards and save them to build your timetable.</div>';
+    return;
+  }
+  container.innerHTML = cards.map((card, i) => `
+    <div class="timeline-item" style="animation-delay:${i * 0.07}s">
+      <div class="timeline-dot"></div>
+      <p class="timeline-date">${card.data.date || 'Date unknown'}</p>
+      <p class="timeline-event">${card.word}</p>
+      <p class="timeline-detail">${card.data.summary || ''}</p>
+    </div>
+  `).join('');
+}
+
+// ─── UTILS ────────────────────────────────────────────────
+function showLoading(mode, show) {
+  const el = document.getElementById(`loading-${mode}`);
+  el.classList.toggle('active', show);
+  if (show) {
+    document.querySelector(`#panel-${mode} .generate-btn`).disabled = true;
+  } else {
+    document.querySelector(`#panel-${mode} .generate-btn`).disabled = false;
+  }
+}
+
+function showError(mode, msg) {
+  const el = document.getElementById(`error-${mode}`);
+  el.textContent = msg;
+  el.classList.add('active');
+}
+
+function clearError(mode) {
+  const el = document.getElementById(`error-${mode}`);
+  el.classList.remove('active');
+}
+
+// ─── Enter key support ────────────────────────────────────
+document.getElementById('vocab-input').addEventListener('keydown', e => { if(e.key==='Enter') generateVocab(); });
+document.getElementById('math-input').addEventListener('keydown', e => { if(e.key==='Enter') generateMath(); });
+document.getElementById('history-input').addEventListener('keydown', e => { if(e.key==='Enter') generateHistory(); });
+
+// ─── PERSISTENCE ──────────────────────────────────────────
+function saveDecks() {
+  localStorage.setItem('mnemo_decks', JSON.stringify(state.decks));
+}
+
+function loadDecks() {
+  try {
+    const saved = localStorage.getItem('mnemo_decks');
+    if (saved) state.decks = JSON.parse(saved);
+  } catch(e) { console.error('Failed to load decks', e); }
+}
+
+// Patch saveCard and deleteCard to persist
+const _origSave = saveCard;
+saveCard = function(mode) {
+  const card = state.currentCard[mode];
+  if (!card) return;
+  if (state.decks[mode].find(c => c.word.toLowerCase() === card.word.toLowerCase())) return;
+  state.decks[mode].push({ ...card, id: Date.now() });
+  saveDecks();
+  renderDeck(mode);
+  document.getElementById(`save-${mode}-btn`).disabled = true;
+  document.getElementById(`save-${mode}-btn`).textContent = '✓ Saved';
+};
+
+const _origDelete = deleteCard;
+deleteCard = function(mode, id) {
+  state.decks[mode] = state.decks[mode].filter(c => c.id !== id);
+  saveDecks();
+  renderDeck(mode);
+};
+
+// Init — load then render
+function init() {
+  loadDecks();
+  initApiKeyUI();
+  ['vocab','math','history'].forEach(m => renderDeck(m));
+}
+
+// Wait for puter to be available
+if (typeof puter !== 'undefined') {
+  init();
+} else {
+  window.addEventListener('load', init);
+}
+</script>
+</body>
+</html>
