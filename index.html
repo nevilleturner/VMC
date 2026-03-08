@@ -1031,14 +1031,15 @@ Schema: { "definition": string, "japanese": string, "slang": string, "etymology"
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON found in response: ' + raw.slice(0, 200));
     const parsed = JSON.parse(jsonMatch[0]);
+    console.log('[Mnemo] parsed vocab:', parsed);
     state.currentCard.vocab = { word, data: parsed };
     renderVocabCard(word, parsed);
     document.getElementById('card-area-vocab').style.display = 'block';
     document.getElementById('card-vocab').classList.remove('flipped');
     document.getElementById('save-vocab-btn').disabled = false;
   } catch(e) {
-    showError('vocab', 'Failed to generate. Please try again.');
-    console.error(e);
+    showError('vocab', 'Error: ' + e.message);
+    console.error('[vocab]', e);
   }
   showLoading('vocab', false);
 }
@@ -1089,14 +1090,15 @@ Schema: { "formula": string, "description": string, "variables": string, "contex
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON found in response: ' + raw.slice(0, 200));
     const parsed = JSON.parse(jsonMatch[0]);
+    console.log('[Mnemo] parsed math:', parsed);
     state.currentCard.math = { word: name, data: parsed };
     renderMathCard(name, parsed);
     document.getElementById('card-area-math').style.display = 'block';
     document.getElementById('card-math').classList.remove('flipped');
     document.getElementById('save-math-btn').disabled = false;
     } catch(e) {
-    showError('math', 'Failed to generate. Please try again.');
-    console.error(e);
+    showError('math', 'Error: ' + e.message);
+    console.error('[math]', e);
   }
   showLoading('math', false);
 }
@@ -1145,14 +1147,15 @@ Schema: { "date": string, "when": string, "summary": string, "details": string, 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON found in response: ' + raw.slice(0, 200));
     const parsed = JSON.parse(jsonMatch[0]);
+    console.log('[Mnemo] parsed history:', parsed);
     state.currentCard.history = { word: event, data: parsed };
     renderHistoryCard(event, parsed);
     document.getElementById('card-area-history').style.display = 'block';
     document.getElementById('card-history').classList.remove('flipped');
     document.getElementById('save-history-btn').disabled = false;
     } catch(e) {
-    showError('history', 'Failed to generate. Please try again.');
-    console.error(e);
+    showError('history', 'Error: ' + e.message);
+    console.error('[history]', e);
   }
   showLoading('history', false);
 }
