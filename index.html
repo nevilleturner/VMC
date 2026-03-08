@@ -982,14 +982,32 @@ function initApiKeyUI() {}
 // ─── API Call (Puter.js — no API key needed) ──────────────
 async function callAI(systemPrompt, userPrompt) {
   const response = await puter.ai.chat(
-    userPrompt,
-    { system: systemPrompt }
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: userPrompt }
+    ]
   );
-  if (typeof response === 'string') return response;
-  return response?.message?.content?.[0]?.text
-      || response?.content?.[0]?.text
-      || response?.text
-      || JSON.stringify(response);
+
+  // Puter returns different shapes — extract text from all known formats
+  let text = '';
+  if (typeof response === 'string') {
+    text = response;
+  } else if (response?.message?.content) {
+    const c = response.message.content;
+    if (typeof c === 'string') text = c;
+    else if (Array.isArray(c)) text = c.map(b => b.text || '').join('');
+  } else if (response?.content) {
+    const c = response.content;
+    if (typeof c === 'string') text = c;
+    else if (Array.isArray(c)) text = c.map(b => b.text || '').join('');
+  } else if (response?.text) {
+    text = response.text;
+  } else {
+    text = JSON.stringify(response);
+  }
+
+  console.log('[Mnemo] raw AI response:', text); // debug
+  return text;
 }
 
 // ─── VOCAB ────────────────────────────────────────────────
@@ -1009,8 +1027,10 @@ Schema: { "definition": string, "japanese": string, "slang": string, "etymology"
 
   try {
     const raw = await callAI(system, `Word: ${word}`);
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    // Extract JSON from response robustly
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response: ' + raw.slice(0, 200));
+    const parsed = JSON.parse(jsonMatch[0]);
     state.currentCard.vocab = { word, data: parsed };
     renderVocabCard(word, parsed);
     document.getElementById('card-area-vocab').style.display = 'block';
@@ -1065,8 +1085,10 @@ Schema: { "formula": string, "description": string, "variables": string, "contex
 
   try {
     const raw = await callAI(system, `Formula/theorem: ${name}`);
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    // Extract JSON from response robustly
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response: ' + raw.slice(0, 200));
+    const parsed = JSON.parse(jsonMatch[0]);
     state.currentCard.math = { word: name, data: parsed };
     renderMathCard(name, parsed);
     document.getElementById('card-area-math').style.display = 'block';
@@ -1119,8 +1141,10 @@ Schema: { "date": string, "when": string, "summary": string, "details": string, 
 
   try {
     const raw = await callAI(system, `Historical event: ${event}`);
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    // Extract JSON from response robustly
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response: ' + raw.slice(0, 200));
+    const parsed = JSON.parse(jsonMatch[0]);
     state.currentCard.history = { word: event, data: parsed };
     renderHistoryCard(event, parsed);
     document.getElementById('card-area-history').style.display = 'block';
